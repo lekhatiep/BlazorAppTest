@@ -110,5 +110,11 @@ namespace SVLaixe.Controllers
                 return BadRequest($"An error occurred: {ex.Message}");
             }
         }
+
+        [HttpGet("Test")]
+        public async Task<IActionResult> Test()
+        {
+            return Ok("Hello CI/CD!");
+        }
     }
 }
