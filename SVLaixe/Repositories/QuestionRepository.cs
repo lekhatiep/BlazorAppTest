@@ -34,15 +34,31 @@ namespace SVLaixe.Repositories
         }
 
 
-        async Task<List<Question>> IQuestionRepository.GetQuestionsByCategoryIdAsync(int categoryId)
+        public async Task<List<QuestionAnswerDto>> GetQuestionsByCategoryIdAsync(int categoryId)
         {
             var connectionString = GetConnectionString();
+            var questionAnswerList = new List<QuestionAnswerDto>();
             using (var connection = new SqlConnection(connectionString))
             {
-                var questions = await connection.QueryAsync<Question>(
-                    "SELECT Id, CategoryId, Text FROM Questions WHERE CategoryId = @CategoryId",
-                    new { CategoryId = categoryId });
-                return questions.ToList();
+                var questions = await connection.QueryAsync<Question>("SELECT * FROM Questions q INNER JOIN Chapter ch ON ch.ChapterID = Q.ChapterID WHERE ch.CatID = @Category", new { Category = categoryId });
+                foreach (var question in questions)
+                {
+                    var answers = await connection.QueryAsync<Answer>(
+                        "SELECT Id, QuestionId, Content, IsCorrect, NumberAnswer FROM Answers WHERE QuestionId = @QuestionNumber",
+                        new { QuestionNumber = question.QuestionNumber });
+                    var questionAnswerDto = new QuestionAnswerDto
+                    {
+                        Id = question.Id,
+                        QuestionNumber = question.QuestionNumber,
+                        Content = question.Content,
+                        Answers = answers.ToList(),
+                        ChapterId = question.ChapterId,
+                        IsCritical = question.IsCritical,
+                        Explanation = question.Explanation,
+                    };
+                    questionAnswerList.Add(questionAnswerDto);
+                }
+                return questionAnswerList;
             }
         }
 
@@ -124,7 +140,6 @@ namespace SVLaixe.Repositories
             }
         }
 
-
         public async Task<bool> IsCorrectAnswerByQuestionId(int questionId, int numberAnswer)
         {
             var connectionString = GetConnectionString();
@@ -139,12 +154,12 @@ namespace SVLaixe.Repositories
 
         public async Task<List<QuestionAnswerDto>> GetQuestionAnswerByChapterIdAsync(int ChapterId)
         {
-            var catID = 1;
             var connectionString = GetConnectionString();
             var questionAnswerList = new List<QuestionAnswerDto>();
             using (var connection = new SqlConnection(connectionString))
             {
                 var questions = await connection.QueryAsync<Question>("SELECT Id, QuestionNumber, Content FROM Questions WHERE ChapterId = @ChapterId", new { ChapterId = ChapterId });
+                
                 foreach (var question in questions)
                 {
                     var answers = await connection.QueryAsync<Answer>(
@@ -160,6 +175,62 @@ namespace SVLaixe.Repositories
                     questionAnswerList.Add(questionAnswerDto);
                 }
                 return questionAnswerList;
+            }
+        }
+
+        public async Task<List<QuestionAnswerDto>> GetRandomExampleQuestionB()
+        {
+            var connectionString = GetConnectionString();
+            var questionAnswerList = new List<QuestionAnswerDto>();
+            using (var connection = new SqlConnection(connectionString))
+            {
+                var questions = await connection.QueryAsync<Question>("[dbo].[GetRandomExamQuestion_CatB]", commandType: System.Data.CommandType.StoredProcedure);
+                foreach (var question in questions)
+                {
+                    var answers = await connection.QueryAsync<Answer>(
+                        "SELECT Id, QuestionId, Content, IsCorrect, NumberAnswer FROM Answers WHERE QuestionId = @QuestionId",
+                        new { QuestionId = question.Id });
+                    var questionAnswerDto = new QuestionAnswerDto
+                    {
+                        Id = question.Id,
+                        QuestionNumber = question.QuestionNumber,
+                        Content = question.Content,
+                        Answers = answers.ToList()
+                    };
+                    questionAnswerList.Add(questionAnswerDto);
+                }
+                return questionAnswerList;
+            }
+        }
+
+        public async Task AddExplainFollowQuestionIdFromJsonFile()
+        {
+            var fileJson = Directory.GetCurrentDirectory() + @"/wwwroot/Data/600_cau_explain.json";
+            if (!File.Exists(fileJson))
+            {
+                throw new FileNotFoundException("The explanations.json file was not found.");
+            }
+            var jsonData = File.ReadAllText(fileJson);
+            var questions = System.Text.Json.JsonSerializer.Deserialize<List<QuestionExplainDto>>(jsonData);
+            if (questions == null || questions.Count == 0)
+            {
+                throw new Exception("No questions found in the JSON file.");
+            }
+
+            var connectionString = GetConnectionString();
+
+            foreach (var questionDto in questions)
+            {
+                var questionId = questionDto.number;
+                var explanation = questionDto.explanation;
+             
+                using (var connection = new SqlConnection(connectionString))
+                {
+                    await connection.ExecuteAsync(
+                        "UPDATE Questions SET Explanation = @Explanation WHERE QuestionNumber = @QuestionNumber",
+                        new { Explanation = explanation, QuestionNumber = questionId });
+                }
+
             }
         }
     }

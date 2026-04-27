@@ -7,7 +7,7 @@
         public int GroupId { get; set; }
         public string Content { get; set; }
         public string ImageUrl { get; set; }
-        public bool isCritical { get; set; }
+        public bool IsCritical { get; set; }
         public string Explanation { get; set; }
 
         public int ChapterId { get; set; }
